@@ -7,7 +7,11 @@ framework validated in Bayona, Hallowell, Bhandari & Raheemy (2026),
 Safety Research 98, 175–189
 ([open access](https://doi.org/10.1016/j.jsr.2026.06.007)).
 
-![Dashboard screenshot](assets/screenshot.png)
+[![Live demo](https://img.shields.io/badge/live_demo-sif--balanced--scorecard.streamlit.app-2a78d6)](https://sif-balanced-scorecard.streamlit.app)
+
+**[▶ Try the live dashboard](https://sif-balanced-scorecard.streamlit.app)** — no install needed.
+
+[![Dashboard screenshot](assets/screenshot.png)](https://sif-balanced-scorecard.streamlit.app)
 
 ## Why
 
