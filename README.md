@@ -92,6 +92,7 @@ src/sif_scorecard/
   models.py       Poisson / zero-inflated Poisson GLMs (Model 6 replication)
 dashboard/        Streamlit three-lens scorecard + what-if projection
 m365-implementation/
+  QUICKSTART.md   No-code setup for EHS pros new to Copilot (one afternoon)
   copilot-agent/  Declarative agent that scores briefs from Teams transcripts
   sharepoint/     Capture list schemas
   power-automate/ Scoring, HECA<30% alerting, weekly digest flows

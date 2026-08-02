@@ -1,5 +1,9 @@
 # M365 implementation: the daily SIF prevention workflow
 
+> **New to Copilot?** Start with **[QUICKSTART.md](QUICKSTART.md)** — the
+> copy-paste version (agent + two Forms + two Excel formulas, one
+> afternoon, no coding). This page describes the full multi-site build.
+
 This folder turns the measurement framework into a workflow EHS professionals
 run every day using tools their organization already owns — Teams, Copilot,
 SharePoint, Power Automate, and Power BI. No new software purchases.
