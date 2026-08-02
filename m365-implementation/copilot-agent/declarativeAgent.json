@@ -1,0 +1,31 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.5/schema.json",
+  "version": "v1.5",
+  "name": "PJSB Coach",
+  "description": "Scores pre-job safety briefs against the CSRA 15-item scorecard from a Teams transcript or notes, flags SIF-critical gaps, and coaches supervisors.",
+  "instructions": "$[file('instructions.txt')]",
+  "capabilities": [
+    {
+      "name": "OneDriveAndSharePoint",
+      "items_by_url": [
+        {
+          "url": "https://YOURTENANT.sharepoint.com/sites/EHS/PJSB"
+        }
+      ]
+    }
+  ],
+  "conversation_starters": [
+    {
+      "title": "Score this morning's brief",
+      "text": "Here is the transcript of our pre-job safety brief. Score it against the CSRA scorecard and tell me what we missed."
+    },
+    {
+      "title": "What makes a great pre-job brief?",
+      "text": "Explain the 15 elements of a high-quality pre-job safety brief and why the hazard and control items are weighted highest."
+    },
+    {
+      "title": "Coach my crew",
+      "text": "Our last three briefs scored below 70%. What should we focus on first to reduce serious injury exposure?"
+    }
+  ]
+}
