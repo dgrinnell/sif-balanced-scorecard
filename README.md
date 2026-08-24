@@ -13,6 +13,16 @@ Safety Research 98, 175–189
 
 [![Dashboard screenshot](assets/screenshot.png)](https://sif-balanced-scorecard.streamlit.app)
 
+**Bring your own data.** Upload a pre-job brief assessment export and a HECA
+observation export — the same schemas the [Microsoft 365 capture
+forms](m365-implementation/README.md) produce — and the dashboard scores your
+site: three-lens tiles, baseline-protocol progress, your position on the SIF
+risk curve, and a coaching agenda showing which scorecard elements your crews
+miss most. Nothing is uploaded anywhere; files stay in the browser session.
+Templates and sample files are in the sidebar and in [`data/samples/`](data/samples).
+
+![Coaching agenda](assets/coaching-agenda.png)
+
 ## Why
 
 Most organizations still steer safety by TRIR — a lagging, frequency-based
@@ -70,6 +80,25 @@ print(task.score)                                # 0.5
 print(expected_sifs_per_1000_fte(task.score))    # ~0.56 expected SIFs
 ```
 
+### Score your own field exports
+
+```python
+import pandas as pd
+from sif_scorecard import load_pjsb_file, load_heca_file
+
+pjsb = load_pjsb_file(pd.read_csv("data/samples/sample_pjsb_assessments.csv"))
+print(f"{pjsb.mean_quality:.0%} across {pjsb.n_assessments} briefs")   # 78% across 18 briefs
+print(pjsb.item_miss_rates.head(3))     # the coaching agenda, worst first
+
+heca = load_heca_file(pd.read_csv("data/samples/sample_heca_observations.csv"))
+print(f"HECA {heca.score:.0%}")                    # HECA 45%
+print(heca.uncontrolled_by_source)                 # where the gaps are
+```
+
+Column names are matched loosely (`Item01`–`Item15`, `Q1`–`Q15`, or the
+statement text), booleans accept Yes/No/TRUE/1/X, and low-energy rows are
+excluded from HECA rather than silently counted.
+
 ### Gate your assessors before trusting their data
 
 ```python
@@ -88,9 +117,10 @@ src/sif_scorecard/
   lagging.py      TRIR and severity-based SBLI (Eq. 1-2)
   risk.py         Fig. 7 risk curve, PJSB->HECA->SIF pathway, coaching bands
   reliability.py  Cohen's kappa, ICC(2,k), the >0.40 assessor gate
+  ingest.py       Load a site's own PJSB/HECA exports (tolerant parsing)
   synthetic.py    Company-panel generator calibrated to the paper's Table 6
   models.py       Poisson / zero-inflated Poisson GLMs (Model 6 replication)
-dashboard/        Streamlit three-lens scorecard + what-if projection
+dashboard/        Streamlit scorecard: your data or the synthetic demo panel
 m365-implementation/
   QUICKSTART.md   No-code setup for EHS pros new to Copilot (one afternoon)
   copilot-agent/  Declarative agent that scores briefs from Teams transcripts

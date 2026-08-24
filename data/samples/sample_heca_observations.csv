@@ -1,0 +1,45 @@
+TaskID,Date,Hazard,EnergySource,HighEnergy,DirectControlPresent
+T-001,2026-05-10,Rotating equipment during task,Mechanical,Yes,No
+T-001,2026-05-18,Rotating equipment during task,Mechanical,Yes,No
+T-001,2026-07-15,Fall from elevation during task,Gravity,Yes,No
+T-002,2026-07-22,Mobile equipment during task,Motion,Yes,Yes
+T-003,2026-07-17,Fall from elevation during task,Gravity,Yes,Yes
+T-003,2026-05-16,Suspended load during task,Gravity,Yes,No
+T-003,2026-05-10,Fall from elevation during task,Gravity,Yes,No
+T-003,2026-07-06,Rotating equipment during task,Mechanical,Yes,Yes
+T-004,2026-06-20,Mobile equipment during task,Motion,Yes,No
+T-004,2026-05-09,Fall from elevation during task,Gravity,Yes,No
+T-005,2026-07-15,Fall from elevation during task,Gravity,Yes,No
+T-005,2026-07-24,Hydraulic/pneumatic during task,Pressure,Yes,Yes
+T-005,2026-07-18,Hot surfaces/steam during task,Temperature,Yes,Yes
+T-006,2026-05-25,Suspended load during task,Gravity,Yes,No
+T-007,2026-05-23,Hot surfaces/steam during task,Temperature,Yes,No
+T-007,2026-05-01,Hydraulic/pneumatic during task,Pressure,Yes,Yes
+T-008,2026-06-24,Hydraulic/pneumatic during task,Pressure,Yes,Yes
+T-009,2026-06-04,Electrical >= 50v during task,Electrical >= 50V,Yes,Yes
+T-009,2026-05-19,Hydraulic/pneumatic during task,Pressure,Yes,Yes
+T-009,2026-05-10,Mobile equipment during task,Motion,Yes,No
+T-010,2026-06-04,Electrical >= 50v during task,Electrical >= 50V,Yes,No
+T-010,2026-05-08,Mobile equipment during task,Motion,Yes,Yes
+T-010,2026-05-13,Electrical >= 50v during task,Electrical >= 50V,Yes,No
+T-011,2026-05-25,Hot surfaces/steam during task,Temperature,Yes,Yes
+T-012,2026-05-10,Electrical >= 50v during task,Electrical >= 50V,Yes,Yes
+T-012,2026-07-11,Electrical >= 50v during task,Electrical >= 50V,Yes,Yes
+T-012,2026-06-17,Hydraulic/pneumatic during task,Pressure,Yes,Yes
+T-012,2026-05-25,Fall from elevation during task,Gravity,Yes,Yes
+T-013,2026-05-19,Suspended load during task,Gravity,Yes,No
+T-014,2026-05-11,Mobile equipment during task,Motion,Yes,No
+T-014,2026-07-17,Rotating equipment during task,Mechanical,Yes,Yes
+T-014,2026-06-05,Electrical >= 50v during task,Electrical >= 50V,Yes,Yes
+T-014,2026-07-06,Fall from elevation during task,Gravity,Yes,No
+T-015,2026-06-27,Hot surfaces/steam during task,Temperature,Yes,No
+T-015,2026-05-19,Fall from elevation during task,Gravity,Yes,No
+T-015,2026-07-03,Fall from elevation during task,Gravity,Yes,Yes
+T-015,2026-07-16,Mobile equipment during task,Motion,Yes,No
+T-016,2026-07-26,Electrical >= 50v during task,Electrical >= 50V,Yes,No
+T-016,2026-06-11,Electrical >= 50v during task,Electrical >= 50V,Yes,No
+T-016,2026-06-11,Mobile equipment during task,Motion,Yes,No
+T-003,2026-06-15,Manual lifting of light components,Ergonomic,No,No
+T-002,2026-06-15,Manual lifting of light components,Ergonomic,No,No
+T-008,2026-06-15,Manual lifting of light components,Ergonomic,No,No
+T-008,2026-06-15,Manual lifting of light components,Ergonomic,No,No

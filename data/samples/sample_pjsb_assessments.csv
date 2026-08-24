@@ -1,0 +1,19 @@
+Crew,Date,Assessor,Item01,Item02,Item03,Item04,Item05,Item06,Item07,Item08,Item09,Item10,Item11,Item12,Item13,Item14,Item15
+Line 2 AM,2026-05-22,T. Okafor,Yes,Yes,Yes,No,Yes,Yes,No,No,Yes,Yes,No,Yes,Yes,Yes,Yes
+Maintenance,2026-06-26,M. Lindqvist,Yes,No,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,No
+Line 2 PM,2026-06-07,R. Vance,Yes,Yes,No,Yes,Yes,Yes,Yes,No,No,Yes,Yes,Yes,Yes,No,Yes
+Contractors,2026-07-24,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes
+Contractors,2026-07-20,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,No,No,Yes,Yes
+Facilities,2026-05-27,M. Lindqvist,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,No,Yes,No,Yes,Yes
+Maintenance,2026-07-19,M. Lindqvist,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,Yes
+Line 2 PM,2026-05-01,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,No,No
+Maintenance,2026-07-23,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,No,Yes,Yes,Yes,Yes
+Maintenance,2026-05-15,T. Okafor,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,No,Yes,Yes
+Line 2 AM,2026-06-21,R. Vance,Yes,Yes,Yes,Yes,No,Yes,Yes,No,Yes,Yes,Yes,Yes,No,Yes,Yes
+Facilities,2026-06-04,M. Lindqvist,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,No,Yes,No,Yes,Yes,Yes,Yes
+Line 2 PM,2026-06-07,M. Lindqvist,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,No,No,Yes,No
+Line 2 AM,2026-06-26,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,No,No,Yes,Yes,Yes
+Contractors,2026-06-21,R. Vance,Yes,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,No,Yes,No,No,Yes,Yes
+Facilities,2026-06-01,R. Vance,Yes,Yes,Yes,Yes,No,Yes,Yes,No,Yes,No,No,No,Yes,Yes,Yes
+Line 2 AM,2026-07-06,R. Vance,Yes,Yes,Yes,No,Yes,Yes,Yes,No,Yes,Yes,Yes,No,Yes,Yes,Yes
+Maintenance,2026-06-22,T. Okafor,Yes,No,No,No,Yes,Yes,Yes,Yes,Yes,Yes,No,Yes,Yes,Yes,Yes
