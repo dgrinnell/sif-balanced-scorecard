@@ -490,7 +490,8 @@ def render_guided_mode() -> None:
     )
     if upload is None:
         st.info(
-            "**Upload a file in the sidebar to begin.** Works with the "
+            "**Upload a file in the sidebar to begin** (on a narrow screen, "
+            "open it with the **»** arrow at the top left). Works with the "
             "spreadsheets you already have — no reformatting. The app finds "
             "the header row even when the export stacks a title above it, "
             "handles legacy encodings, and flags columns that look like "
@@ -794,7 +795,14 @@ def render_demo_mode() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="SIF Balanced Scorecard", layout="wide")
+    # The sidebar holds every control, so it must not start collapsed —
+    # otherwise a first-time visitor is told to upload a file in a sidebar
+    # they cannot see.
+    st.set_page_config(
+        page_title="SIF Balanced Scorecard",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
     st.title("SIF Balanced Scorecard")
     st.caption(
         "Leading / monitoring / lagging safety measurement, after Bayona, "
