@@ -16,6 +16,8 @@ straight in.
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from dataclasses import dataclass, field
 
@@ -267,6 +269,277 @@ def load_heca_file(df: pd.DataFrame) -> HECAUpload:
         uncontrolled_by_source=uncontrolled,
         n_tasks=int(work[task_col].nunique()) if task_col else None,
     )
+
+
+# --------------------------------------------------------------------------
+# Universal ingest: read any hazard-shaped export
+# --------------------------------------------------------------------------
+
+# Columns whose *names* suggest personal data. EHS exports routinely carry
+# reporter and injured-person fields; surfacing them lets the user drop them
+# before anything is displayed or downloaded.
+PII_COLUMN_PATTERN = re.compile(
+    r"\b(?:first|last|full) ?name\b|\bemployee\b|\bperson(?:nel)?\b|\bworker\b"
+    r"|\binjured\b|\breporter\b|reported by|\bemail\b|e-?mail|\bphone\b"
+    r"|\bmobile\b|\bssn\b|social security|\bdob\b|date of birth|\bbadge\b"
+    r"|\binitials\b|\bcontact\b|\bsupervisor\b|\bmanager\b|home address",
+    re.IGNORECASE,
+)
+# A bare "name" is only personal when it isn't naming a thing.
+_BARE_NAME = re.compile(r"\bnames?\b", re.IGNORECASE)
+_THING_NAME = re.compile(
+    r"\b(?:site|task|file|project|company|product|equipment|asset|job|step"
+    r"|document|report|sheet|column|process|program|system|area|building"
+    r"|room|unit|device|machine|chemical|material|vendor|supplier|facility"
+    r"|location|entity|department|field|test|method|study|lab|tool|line"
+    r"|procedure|sub|business)\s*names?\b",
+    re.IGNORECASE,
+)
+_EMAIL_VALUE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+
+# Suggestion cues for the column-mapping step.
+ROLE_PATTERNS: dict[str, str] = {
+    "description": r"hazard|description|detail|finding|concern|task|activity|title|issue|narrative|event",
+    "controls": r"control|safeguard|mitigat|barrier|protection|countermeasure|existing|current",
+    "energy_source": r"energy|categor|hazard type|classification|source",
+    "location": r"location|area|site|dept|department|building|zone|room|line",
+    "frequency": r"frequenc|how often|periodic|interval|occurrence",
+    "workers": r"exposed|headcount|# ?of|number of|people|crew size|employees",
+    "verification": r"verif|audit|last (?:check|inspect|test)|status|result",
+}
+
+
+@dataclass(frozen=True)
+class SheetProfile:
+    """What a single sheet or CSV contains, after header detection."""
+
+    name: str
+    n_rows: int
+    columns: list[str]
+    header_row: int
+    pii_columns: list[str]
+    preview: pd.DataFrame
+
+
+def detect_header_row(raw: pd.DataFrame, max_scan: int = 8) -> int:
+    """Find the row that actually holds column names.
+
+    System exports (incident databases, report builders, consolidated
+    workbooks) stack a title and a description above the real header. The
+    header is the earliest row with several distinct, short, mostly-text
+    cells.
+    """
+    width = max((raw.notna().sum(axis=1).max(), 1))
+    best_row, best_score = 0, -1.0
+    for i in range(min(max_scan, len(raw))):
+        values = [v for v in raw.iloc[i].tolist() if pd.notna(v)]
+        if len(values) < 2:
+            continue
+        texts = [str(v).strip() for v in values]
+        fullness = len(values) / width  # a header spans the table
+        textiness = sum(1 for t in texts if not _looks_numeric(t)) / len(texts)
+        shortish = sum(1 for t in texts if 0 < len(t) <= 60) / len(texts)
+        # Deliberately no distinctness term: merged cells legitimately
+        # produce repeated header labels, and penalizing that picked the
+        # first data row instead. The position penalty breaks ties toward
+        # the earliest qualifying row.
+        score = fullness * textiness * shortish - i * 0.02
+        if score > best_score:
+            best_row, best_score = i, score
+    return best_row
+
+
+def _looks_numeric(text: str) -> bool:
+    """True for values that read as data rather than a field label."""
+    try:
+        float(text.replace(",", ""))
+        return True
+    except (TypeError, ValueError):
+        return bool(re.fullmatch(r"\d{1,4}[-/]\d{1,2}[-/]\d{1,4}", text.strip()))
+
+
+def detect_pii_columns(df: pd.DataFrame) -> list[str]:
+    """Columns that look like personal data, by name or by email-shaped values."""
+    flagged: list[str] = []
+    for col in df.columns:
+        label = str(col)
+        is_personal = bool(PII_COLUMN_PATTERN.search(label)) or (
+            bool(_BARE_NAME.search(label)) and not _THING_NAME.search(label)
+        )
+        if is_personal:
+            flagged.append(col)
+            continue
+        sample = df[col].dropna().astype(str).head(25)
+        if len(sample) and sample.str.contains(_EMAIL_VALUE).mean() > 0.2:
+            flagged.append(col)
+    return flagged
+
+
+def read_table(file, sheet_name: str | None = None) -> pd.DataFrame:
+    """Read a CSV or Excel sheet with header detection and encoding fallback."""
+    name = getattr(file, "name", str(file)).lower()
+    if name.endswith((".xlsx", ".xls")):
+        raw = pd.read_excel(file, sheet_name=sheet_name or 0, header=None,
+                            dtype=object)
+    else:
+        raw = _read_ragged_csv(file)
+    if raw.empty:
+        raise IngestError("The file (or selected sheet) is empty.")
+
+    header_row = detect_header_row(raw)
+    df = raw.iloc[header_row + 1:].reset_index(drop=True)
+    # Collapse the newlines and padding that spreadsheet headers carry, so
+    # labels stay readable in a dropdown.
+    df.columns = [
+        re.sub(r"\s+", " ", str(c)).strip() if pd.notna(c) else f"column_{i}"
+        for i, c in enumerate(raw.iloc[header_row].tolist())
+    ]
+    # Drop fully-empty columns and rows, and de-duplicate column labels.
+    df = df.dropna(axis=1, how="all").dropna(axis=0, how="all")
+    seen: dict[str, int] = {}
+    labels = []
+    for col in df.columns:
+        if col in seen:
+            seen[col] += 1
+            labels.append(f"{col}.{seen[col]}")
+        else:
+            seen[col] = 0
+            labels.append(col)
+    df.columns = labels
+    df.attrs["header_row"] = header_row
+    return df
+
+
+def _read_ragged_csv(file) -> pd.DataFrame:
+    """Parse a CSV whose rows have differing field counts.
+
+    Report-builder exports put a one-cell title above a many-cell header,
+    which pandas rejects outright. Parsing with the csv module and padding
+    short rows keeps those files readable.
+    """
+    if hasattr(file, "seek"):
+        file.seek(0)
+    payload = file.read() if hasattr(file, "read") else open(file, "rb").read()
+    if isinstance(payload, bytes):
+        for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                text = payload.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:  # pragma: no cover - latin-1 decodes any byte string
+            raise IngestError("Could not decode the file's text.")
+    else:
+        text = payload
+
+    rows = [r for r in csv.reader(io.StringIO(text)) if any(str(c).strip() for c in r)]
+    if not rows:
+        raise IngestError("The file (or selected sheet) is empty.")
+    width = max(len(r) for r in rows)
+    padded = [
+        [(c if str(c).strip() else None) for c in r] + [None] * (width - len(r))
+        for r in rows
+    ]
+    return pd.DataFrame(padded, dtype=object)
+
+
+def list_sheets(file) -> list[str]:
+    """Sheet names for an Excel upload; empty list for CSV."""
+    name = getattr(file, "name", str(file)).lower()
+    if not name.endswith((".xlsx", ".xls")):
+        return []
+    return pd.ExcelFile(file).sheet_names
+
+
+def profile_table(df: pd.DataFrame, name: str = "data") -> SheetProfile:
+    """Summarize a loaded table for the mapping step."""
+    return SheetProfile(
+        name=name,
+        n_rows=len(df),
+        columns=[str(c) for c in df.columns],
+        header_row=int(df.attrs.get("header_row", 0)),
+        pii_columns=detect_pii_columns(df),
+        preview=df.head(5),
+    )
+
+
+def suggest_column(columns: list[str], role: str) -> str | None:
+    """Best-guess column for a mapping role, or None if nothing matches."""
+    pattern = ROLE_PATTERNS.get(role)
+    if not pattern:
+        return None
+    compiled = re.compile(pattern, re.IGNORECASE)
+    matches = [c for c in columns if compiled.search(str(c))]
+    if not matches:
+        return None
+    # Prefer the most specific (shortest) matching label.
+    return min(matches, key=lambda c: len(str(c)))
+
+
+def classify_table(
+    df: pd.DataFrame,
+    description_col: str,
+    controls_col: str | None = None,
+    energy_col: str | None = None,
+    location_col: str | None = None,
+    frequency_col: str | None = None,
+    workers_col: str | None = None,
+) -> pd.DataFrame:
+    """Run the keyword classifiers over a mapped table.
+
+    Returns a review table with one row per hazard: the classification, the
+    phrase that produced it, and editable energy/control columns. Nothing
+    here is a finding until a human reviews it.
+    """
+    from .classify import classify_control, classify_energy
+
+    if description_col not in df.columns:
+        raise IngestError(f"Column '{description_col}' is not in the file.")
+
+    rows = []
+    for _, record in df.iterrows():
+        description = str(record[description_col] or "").strip()
+        if not description:
+            continue
+        energy_text = description
+        if energy_col and energy_col in df.columns:
+            energy_text = f"{description} {record[energy_col]}"
+        control_text = (
+            str(record[controls_col]) if controls_col and controls_col in df.columns
+            else ""
+        )
+        energy = classify_energy(energy_text)
+        control = classify_control(control_text)
+        rows.append(
+            {
+                "hazard": description[:180],
+                "location": (
+                    str(record[location_col])
+                    if location_col and location_col in df.columns else ""
+                ),
+                "energy_source": energy.source or "",
+                "high_energy": energy.label,
+                "why_energy": energy.reason,
+                "direct_control": control.is_direct,
+                "control_type": control.control_type,
+                "why_control": control.reason,
+                "verification": "unverified" if control.is_direct else "absent",
+                "exposure_freq": (
+                    str(record[frequency_col])
+                    if frequency_col and frequency_col in df.columns else "weekly"
+                ),
+                "workers_exposed": (
+                    record[workers_col]
+                    if workers_col and workers_col in df.columns else 1
+                ),
+            }
+        )
+    if not rows:
+        raise IngestError(
+            f"No rows had text in '{description_col}'. Pick the column that "
+            "holds the hazard description."
+        )
+    return pd.DataFrame(rows)
 
 
 def pjsb_template() -> pd.DataFrame:

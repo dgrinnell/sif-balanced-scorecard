@@ -33,10 +33,20 @@ from sif_scorecard.ingest import (  # noqa: E402
     HECAUpload,
     IngestError,
     PJSBUpload,
+    classify_table,
     heca_template,
+    list_sheets,
     load_heca_file,
     load_pjsb_file,
     pjsb_template,
+    profile_table,
+    read_table,
+    suggest_column,
+)
+from sif_scorecard.triage import (  # noqa: E402
+    TIER_NAMES,
+    assign_tier,
+    documented_heca,
 )
 from sif_scorecard.lagging import sbli, trir  # noqa: E402
 from sif_scorecard.risk import (  # noqa: E402
@@ -461,6 +471,211 @@ def render_site_mode() -> None:
 
 
 # --------------------------------------------------------------------------
+# guided mode: any hazard file
+# --------------------------------------------------------------------------
+
+TIER_COLORS = {1: CRITICAL, 2: ORANGE, 3: BLUE, 4: INK_MUTED}
+
+
+def render_guided_mode() -> None:
+    st.caption(
+        "Upload **any** hazard-shaped file — a JHA register, inspection log, "
+        "risk register, LOTO list. The app reads it, proposes an energy and "
+        "control classification for each row **with the phrase that produced "
+        "it**, and lets you correct every call before anything is scored. No "
+        "AI model is involved: same file in, same classification out."
+    )
+    upload = st.sidebar.file_uploader(
+        "Hazard file", type=["csv", "xlsx", "xls"], key="guided_up"
+    )
+    if upload is None:
+        st.info(
+            "**Upload a file in the sidebar to begin.** Works with the "
+            "spreadsheets you already have — no reformatting. The app finds "
+            "the header row even when the export stacks a title above it, "
+            "handles legacy encodings, and flags columns that look like "
+            "personal data before anything is displayed."
+        )
+        return
+
+    # --- read, with sheet choice for workbooks ---------------------------
+    try:
+        sheets = list_sheets(upload)
+        sheet = None
+        if len(sheets) > 1:
+            sheet = st.sidebar.selectbox("Sheet", sheets)
+        table = read_table(upload, sheet_name=sheet)
+        profile = profile_table(table, sheet or upload.name)
+    except IngestError as exc:
+        st.error(str(exc))
+        return
+    except Exception as exc:
+        st.error(f"Could not read that file — {exc}")
+        return
+
+    st.success(
+        f"Read **{profile.n_rows} rows** and {len(profile.columns)} columns"
+        + (f" from sheet *{sheet}*" if sheet else "")
+        + (f" (header found on row {profile.header_row + 1})"
+           if profile.header_row else "")
+    )
+
+    # --- privacy ----------------------------------------------------------
+    keep_pii = False
+    if profile.pii_columns:
+        st.warning(
+            "**Possible personal data.** These columns look like they name "
+            f"people: {', '.join(f'`{c}`' for c in profile.pii_columns)}. "
+            "They are dropped from everything shown and downloaded below "
+            "unless you say otherwise — injury records identify individuals, "
+            "and a triage register does not need them."
+        )
+        keep_pii = st.checkbox("Keep these columns anyway", value=False)
+    if profile.pii_columns and not keep_pii:
+        table = table.drop(columns=profile.pii_columns, errors="ignore")
+
+    with st.expander("Preview the file as read"):
+        st.dataframe(table.head(8), use_container_width=True)
+
+    # --- column mapping ---------------------------------------------------
+    st.subheader("1. Map your columns")
+    st.caption(
+        "Only the hazard description is required. The more you map, the "
+        "better the first pass."
+    )
+    columns = [str(c) for c in table.columns]
+    options = ["(none)"] + columns
+
+    def pick(label: str, role: str, required: bool = False) -> str | None:
+        guess = suggest_column(columns, role)
+        if required:
+            index = columns.index(guess) if guess in columns else 0
+            return st.selectbox(label, columns, index=index)
+        index = options.index(guess) if guess in options else 0
+        choice = st.selectbox(label, options, index=index)
+        return None if choice == "(none)" else choice
+
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        description_col = pick("Hazard description *", "description", True)
+        controls_col = pick("Existing controls", "controls")
+    with col_b:
+        energy_col = pick("Hazard category / energy", "energy_source")
+        location_col = pick("Location / area", "location")
+    with col_c:
+        frequency_col = pick("Frequency", "frequency")
+        workers_col = pick("People exposed", "workers")
+
+    # --- classify ---------------------------------------------------------
+    try:
+        proposed = classify_table(
+            table, description_col, controls_col=controls_col,
+            energy_col=energy_col, location_col=location_col,
+            frequency_col=frequency_col, workers_col=workers_col,
+        )
+    except IngestError as exc:
+        st.error(str(exc))
+        return
+
+    st.subheader("2. Review and correct the classification")
+    counts = proposed["high_energy"].value_counts()
+    a, b, c = st.columns(3)
+    a.metric("Proposed high-energy", int(counts.get("yes", 0)))
+    b.metric("Uncertain — needs your call", int(counts.get("uncertain", 0)))
+    c.metric("Low-energy", int(counts.get("no", 0)))
+    st.caption(
+        "**Nothing here is a finding yet.** Every row shows the phrase that "
+        "drove its classification — edit the `high_energy`, `direct_control` "
+        "and `verification` cells directly. Rows the rules could not judge "
+        "are marked *uncertain* rather than guessed, which is the honest "
+        "default: unknown magnitude routes to field verification."
+    )
+    reviewed = st.data_editor(
+        proposed,
+        use_container_width=True,
+        height=380,
+        column_config={
+            "high_energy": st.column_config.SelectboxColumn(
+                "high_energy", options=["yes", "no", "uncertain"], required=True
+            ),
+            "direct_control": st.column_config.CheckboxColumn("direct_control"),
+            "verification": st.column_config.SelectboxColumn(
+                "verification",
+                options=["verified", "unverified", "failed", "absent"],
+                required=True,
+            ),
+            "why_energy": st.column_config.TextColumn("why_energy", width="medium"),
+            "why_control": st.column_config.TextColumn("why_control", width="medium"),
+        },
+        disabled=["hazard", "location", "why_energy", "why_control"],
+        key="review_editor",
+    )
+
+    # --- score ------------------------------------------------------------
+    rows = []
+    for record in reviewed.to_dict("records"):
+        high = {"yes": True, "no": False}.get(record["high_energy"], None)
+        tiered = assign_tier(
+            high, bool(record["direct_control"]), record["verification"],
+            record["exposure_freq"], record["workers_exposed"],
+        )
+        rows.append({**record, "high_energy_bool": high, "tier": tiered.tier,
+                     "rule": tiered.rule, "exposure_weight": tiered.exposure_weight})
+    scored = pd.DataFrame(rows)
+
+    st.subheader("3. Your ranked SIF exposure register")
+    heca_rows = [
+        {"high_energy": r["high_energy_bool"], "direct_control": r["direct_control"],
+         "verification": r["verification"]}
+        for r in rows
+    ]
+    heca_value = documented_heca(heca_rows)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Tier 1 — act now", int((scored["tier"] == 1).sum()))
+    m2.metric("Tier 2 — verify", int((scored["tier"] == 2).sum()))
+    m3.metric(
+        "Documented HECA",
+        f"{heca_value:.0%}" if heca_value is not None else "—",
+        help=HECA_HELP,
+    )
+
+    if heca_value is not None:
+        left, right = st.columns([3, 2])
+        with left:
+            st.plotly_chart(risk_curve_figure(heca_value, "Your site"),
+                            use_container_width=True)
+        with right:
+            projection_panel(heca_value, 10)
+
+    for tier in (1, 2, 3, 4):
+        group = scored[scored["tier"] == tier].sort_values(
+            "exposure_weight", ascending=False
+        )
+        if group.empty:
+            continue
+        with st.expander(f"{TIER_NAMES[tier]} — {len(group)} row(s)",
+                         expanded=(tier == 1)):
+            st.dataframe(
+                group[["hazard", "location", "energy_source", "control_type",
+                       "rule", "exposure_weight"]],
+                use_container_width=True, hide_index=True,
+            )
+
+    st.markdown("---")
+    st.download_button(
+        "⬇ Download normalized hazards.csv",
+        csv_bytes(scored.drop(columns=["high_energy_bool"])),
+        "hazards.csv", "text/csv",
+    )
+    st.caption(
+        "This normalized file is the input format for a full SIF triage — "
+        "hand it to an analyst, or keep it as the register of record. "
+        "Classifications are a keyword first pass reviewed by you; documents "
+        "are not field conditions, so verify Tier 1 and Tier 2 rows on site."
+    )
+
+
+# --------------------------------------------------------------------------
 # demo mode
 # --------------------------------------------------------------------------
 
@@ -586,13 +801,26 @@ def main() -> None:
         "Hallowell, Bhandari & Raheemy (2026), *J. Safety Research* 98."
     )
     mode = st.sidebar.radio(
-        "Data source", ["My site data", "Demo — synthetic panel"], index=0,
+        "Data source",
+        ["Any hazard file (guided)", "PJSB / HECA exports", "Demo — synthetic panel"],
+        index=0,
+        help="Start with 'Any hazard file' if you have a JHA register, "
+        "inspection log, or risk register. Use 'PJSB / HECA exports' if you "
+        "are already capturing scorecard and hazard-observation data.",
     )
     st.sidebar.markdown("---")
-    if mode == "My site data":
+    if mode.startswith("Any"):
+        render_guided_mode()
+    elif mode.startswith("PJSB"):
         render_site_mode()
     else:
         render_demo_mode()
+    st.sidebar.markdown("---")
+    st.sidebar.caption(
+        "🔒 Files are processed in this session's memory and are not stored "
+        "or sent anywhere. For confidential injury records, run the app "
+        "locally: `streamlit run dashboard/app.py`."
+    )
 
 
 if __name__ == "__main__":

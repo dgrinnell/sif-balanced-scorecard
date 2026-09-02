@@ -13,15 +13,49 @@ Safety Research 98, 175–189
 
 [![Dashboard screenshot](assets/screenshot.png)](https://sif-balanced-scorecard.streamlit.app)
 
-**Bring your own data.** Upload a pre-job brief assessment export and a HECA
-observation export — the same schemas the [Microsoft 365 capture
-forms](m365-implementation/README.md) produce — and the dashboard scores your
-site: three-lens tiles, baseline-protocol progress, your position on the SIF
-risk curve, and a coaching agenda showing which scorecard elements your crews
-miss most. Nothing is uploaded anywhere; files stay in the browser session.
-Templates and sample files are in the sidebar and in [`data/samples/`](data/samples).
+## Bring your own data
+
+The dashboard has three modes, so an EHS professional can get value from
+whatever data they already have.
+
+### 1. Any hazard file (guided) — start here
+
+Upload the spreadsheet you already keep: a JHA register, inspection log,
+risk register, LOTO list. No reformatting. The app finds the header row even
+when the export stacks a title above it, survives legacy encodings, flags
+columns that look like personal data and drops them by default, then proposes
+an energy and Direct Control classification for every row — **each one showing
+the phrase that produced it** — which you correct before anything is scored.
+
+```
+"Work near roof edge, approx 20 ft"    → matched "roof" → gravity-fall (>1,500 J)
+"Warning line 6 ft from edge"          → matched "warning line"; targets behaviour,
+                                          not the energy source → NOT a Direct Control
+```
+
+No language model is involved: same file in, same classification out, every
+call auditable and overridable. You get a ranked Tier 1–4 register, documented
+HECA, the risk projection, and a normalized `hazards.csv` to keep or hand on.
+
+![Guided upload and classification](assets/guided-upload.png)
+![Ranked register](assets/guided-register.png)
+
+### 2. PJSB / HECA exports — if you're already capturing scorecard data
+
+Upload a pre-job brief assessment export and a HECA observation export — the
+same schemas the [Microsoft 365 capture forms](m365-implementation/README.md)
+produce — for three-lens tiles, baseline-protocol progress, your position on
+the risk curve, and a coaching agenda showing which scorecard elements your
+crews miss most. Templates and samples are in the sidebar and
+[`data/samples/`](data/samples).
 
 ![Coaching agenda](assets/coaching-agenda.png)
+
+### 3. Demo — the synthetic 31-company panel, for exploring the framework
+
+**Privacy:** uploads are processed in the session's memory and are not stored
+or transmitted. For confidential injury records, run the app locally
+(`streamlit run dashboard/app.py`) rather than using the hosted demo.
 
 ## Why
 
@@ -99,6 +133,23 @@ Column names are matched loosely (`Item01`–`Item15`, `Q1`–`Q15`, or the
 statement text), booleans accept Yes/No/TRUE/1/X, and low-energy rows are
 excluded from HECA rather than silently counted.
 
+### Classify free-text hazards, with the reasoning attached
+
+```python
+from sif_scorecard.classify import classify_energy, classify_control
+
+e = classify_energy("Racking breakers in the 480V MCC room")
+print(e.source, e.high_energy, e.reason)
+# electrical True matched "480V" → electrical (>1,500 J class)
+
+c = classify_control("Operators trained annually; high-vis vests required")
+print(c.is_direct, c.control_type)
+# False non-direct: training / qualification
+```
+
+Text that matches nothing returns `high_energy=None` — genuinely uncertain,
+which routes to field verification instead of a guess in either direction.
+
 ### Gate your assessors before trusting their data
 
 ```python
@@ -117,7 +168,11 @@ src/sif_scorecard/
   lagging.py      TRIR and severity-based SBLI (Eq. 1-2)
   risk.py         Fig. 7 risk curve, PJSB->HECA->SIF pathway, coaching bands
   reliability.py  Cohen's kappa, ICC(2,k), the >0.40 assessor gate
-  ingest.py       Load a site's own PJSB/HECA exports (tolerant parsing)
+  ingest.py       Read any hazard export: header detection, encoding
+                  fallback, PII flagging, column mapping, PJSB/HECA loaders
+  classify.py     Explainable keyword classifiers: energy source, >1,500 J
+                  threshold, and the Direct Control test
+  triage.py       Tier rules and exposure weighting for a reviewed table
   synthetic.py    Company-panel generator calibrated to the paper's Table 6
   models.py       Poisson / zero-inflated Poisson GLMs (Model 6 replication)
 dashboard/        Streamlit scorecard: your data or the synthetic demo panel
